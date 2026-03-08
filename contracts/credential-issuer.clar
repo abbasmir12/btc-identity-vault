@@ -1,0 +1,325 @@
+;; credential-issuer.clar
+;; Manages trusted issuers who can issue and revoke verifiable credentials
+;; Part of Bitcoin Identity Vault - Self-Sovereign Identity on Stacks
+
+;; ============================================================
+;; Constants
+;; ============================================================
+(define-constant CONTRACT-OWNER tx-sender)
+(define-constant ERR-NOT-AUTHORIZED (err u200))
+(define-constant ERR-ALREADY-REGISTERED (err u201))
+(define-constant ERR-NOT-REGISTERED (err u202))
+(define-constant ERR-ISSUER-NOT-VERIFIED (err u203))
+(define-constant ERR-ISSUER-SUSPENDED (err u204))
+(define-constant ERR-CREDENTIAL-NOT-FOUND (err u205))
+(define-constant ERR-ALREADY-REVOKED (err u206))
+(define-constant ERR-INVALID-INPUT (err u207))
+(define-constant ERR-BATCH-TOO-LARGE (err u208))
+
+;; Maximum batch size for bulk issuance
+(define-constant MAX-BATCH-SIZE u25)
+
+;; ============================================================
+;; Data Variables
+;; ============================================================
+(define-data-var total-issuers uint u0)
+(define-data-var total-issued uint u0)
+(define-data-var total-revoked uint u0)
+
+;; ============================================================
+;; Data Maps
+;; ============================================================
+
+;; Issuer registry
+(define-map issuers
+  principal
+  {
+    name: (string-ascii 128),
+    issuer-type: (string-ascii 32),
+    registered-at: uint,
+    credentials-issued: uint,
+    is-verified: bool,
+    is-suspended: bool,
+    metadata-url: (string-ascii 256)
+  }
+)
+
+;; Issued credentials tracking
+(define-map issued-credentials
+  { issuer: principal, credential-hash: (buff 32) }
+  {
+    recipient: principal,
+    credential-type: (string-ascii 32),
+    issued-at: uint,
+    is-revoked: bool,
+    revoked-at: uint,
+    revocation-reason: (string-ascii 256)
+  }
+)
+
+;; Admin list for governance
+(define-map admins principal bool)
+
+;; ============================================================
+;; Initialize
+;; ============================================================
+
+;; Set contract owner as initial admin
+(map-set admins CONTRACT-OWNER true)
+
+;; ============================================================
+;; Private Functions
+;; ============================================================
+
+(define-private (is-admin (caller principal))
+  (default-to false (map-get? admins caller))
+)
+
+(define-private (is-verified-issuer (issuer-addr principal))
+  (match (map-get? issuers issuer-addr)
+    issuer (and (get is-verified issuer) (not (get is-suspended issuer)))
+    false
+  )
+)
+
+;; ============================================================
+;; Read-Only Functions
+;; ============================================================
+
+;; Get issuer profile
+(define-read-only (get-issuer (issuer-addr principal))
+  (map-get? issuers issuer-addr)
+)
+
+;; Check if address is a verified issuer
+(define-read-only (check-issuer-status (issuer-addr principal))
+  (match (map-get? issuers issuer-addr)
+    issuer (ok {
+      is-registered: true,
+      is-verified: (get is-verified issuer),
+      is-suspended: (get is-suspended issuer),
+      credentials-issued: (get credentials-issued issuer)
+    })
+    (ok {
+      is-registered: false,
+      is-verified: false,
+      is-suspended: false,
+      credentials-issued: u0
+    })
+  )
+)
+
+;; Get issued credential details
+(define-read-only (get-issued-credential (issuer-addr principal) (credential-hash (buff 32)))
+  (map-get? issued-credentials { issuer: issuer-addr, credential-hash: credential-hash })
+)
+
+;; Get stats
+(define-read-only (get-stats)
+  {
+    total-issuers: (var-get total-issuers),
+    total-issued: (var-get total-issued),
+    total-revoked: (var-get total-revoked)
+  }
+)
+
+;; ============================================================
+;; Public Functions
+;; ============================================================
+
+;; Register as an issuer (pending verification)
+(define-public (register-issuer
+  (name (string-ascii 128))
+  (issuer-type (string-ascii 32))
+  (metadata-url (string-ascii 256))
+)
+  (let
+    (
+      (caller tx-sender)
+    )
+    ;; Validate inputs
+    (asserts! (> (len name) u0) ERR-INVALID-INPUT)
+    
+    ;; Check not already registered
+    (asserts! (is-none (map-get? issuers caller)) ERR-ALREADY-REGISTERED)
+    
+    ;; Register issuer (unverified by default)
+    (map-set issuers caller {
+      name: name,
+      issuer-type: issuer-type,
+      registered-at: block-height,
+      credentials-issued: u0,
+      is-verified: false,
+      is-suspended: false,
+      metadata-url: metadata-url
+    })
+    
+    ;; Increment counter
+    (var-set total-issuers (+ (var-get total-issuers) u1))
+    
+    (print { event: "issuer-registered", issuer: caller, name: name, issuer-type: issuer-type })
+    (ok true)
+  )
+)
+
+;; Issue a credential to a recipient
+(define-public (issue-credential
+  (recipient principal)
+  (credential-hash (buff 32))
+  (credential-type (string-ascii 32))
+  (expires-at uint)
+  (metadata-url (string-ascii 256))
+)
+  (let
+    (
+      (issuer tx-sender)
+      (issuer-profile (unwrap! (map-get? issuers issuer) ERR-NOT-REGISTERED))
+    )
+    ;; Verify issuer is verified and not suspended
+    (asserts! (get is-verified issuer-profile) ERR-ISSUER-NOT-VERIFIED)
+    (asserts! (not (get is-suspended issuer-profile)) ERR-ISSUER-SUSPENDED)
+    
+    ;; Validate hash
+    (asserts! (> (len credential-hash) u0) ERR-INVALID-INPUT)
+    
+    ;; Track issued credential
+    (map-set issued-credentials
+      { issuer: issuer, credential-hash: credential-hash }
+      {
+        recipient: recipient,
+        credential-type: credential-type,
+        issued-at: block-height,
+        is-revoked: false,
+        revoked-at: u0,
+        revocation-reason: ""
+      }
+    )
+    
+    ;; Update issuer stats
+    (map-set issuers issuer
+      (merge issuer-profile { credentials-issued: (+ (get credentials-issued issuer-profile) u1) })
+    )
+    
+    ;; Increment total
+    (var-set total-issued (+ (var-get total-issued) u1))
+    
+    (print { event: "credential-issued", issuer: issuer, recipient: recipient, credential-hash: credential-hash, credential-type: credential-type })
+    (ok true)
+  )
+)
+
+;; Revoke a credential
+(define-public (revoke-credential
+  (credential-hash (buff 32))
+  (reason (string-ascii 256))
+)
+  (let
+    (
+      (issuer tx-sender)
+      (cred (unwrap! (map-get? issued-credentials { issuer: issuer, credential-hash: credential-hash }) ERR-CREDENTIAL-NOT-FOUND))
+    )
+    ;; Check not already revoked
+    (asserts! (not (get is-revoked cred)) ERR-ALREADY-REVOKED)
+    
+    ;; Revoke credential
+    (map-set issued-credentials
+      { issuer: issuer, credential-hash: credential-hash }
+      (merge cred {
+        is-revoked: true,
+        revoked-at: block-height,
+        revocation-reason: reason
+      })
+    )
+    
+    ;; Increment revoked count
+    (var-set total-revoked (+ (var-get total-revoked) u1))
+    
+    (print { event: "credential-revoked", issuer: issuer, credential-hash: credential-hash, reason: reason })
+    (ok true)
+  )
+)
+
+;; ============================================================
+;; Admin Functions
+;; ============================================================
+
+;; Verify an issuer (admin only)
+(define-public (verify-issuer (issuer-addr principal))
+  (let
+    (
+      (caller tx-sender)
+      (issuer-profile (unwrap! (map-get? issuers issuer-addr) ERR-NOT-REGISTERED))
+    )
+    ;; Only admins can verify
+    (asserts! (is-admin caller) ERR-NOT-AUTHORIZED)
+    
+    ;; Update verification status
+    (map-set issuers issuer-addr
+      (merge issuer-profile { is-verified: true })
+    )
+    
+    (print { event: "issuer-verified", issuer: issuer-addr, verified-by: caller })
+    (ok true)
+  )
+)
+
+;; Suspend an issuer (admin only)
+(define-public (suspend-issuer (issuer-addr principal))
+  (let
+    (
+      (caller tx-sender)
+      (issuer-profile (unwrap! (map-get? issuers issuer-addr) ERR-NOT-REGISTERED))
+    )
+    ;; Only admins can suspend
+    (asserts! (is-admin caller) ERR-NOT-AUTHORIZED)
+    
+    ;; Suspend issuer
+    (map-set issuers issuer-addr
+      (merge issuer-profile { is-suspended: true })
+    )
+    
+    (print { event: "issuer-suspended", issuer: issuer-addr, suspended-by: caller })
+    (ok true)
+  )
+)
+
+;; Unsuspend an issuer (admin only)
+(define-public (unsuspend-issuer (issuer-addr principal))
+  (let
+    (
+      (caller tx-sender)
+      (issuer-profile (unwrap! (map-get? issuers issuer-addr) ERR-NOT-REGISTERED))
+    )
+    ;; Only admins can unsuspend
+    (asserts! (is-admin caller) ERR-NOT-AUTHORIZED)
+    
+    ;; Unsuspend issuer
+    (map-set issuers issuer-addr
+      (merge issuer-profile { is-suspended: false })
+    )
+    
+    (print { event: "issuer-unsuspended", issuer: issuer-addr, unsuspended-by: caller })
+    (ok true)
+  )
+)
+
+;; Add admin (owner only)
+(define-public (add-admin (new-admin principal))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
+    (map-set admins new-admin true)
+    (print { event: "admin-added", admin: new-admin })
+    (ok true)
+  )
+)
+
+;; Remove admin (owner only)
+(define-public (remove-admin (admin-addr principal))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
+    (asserts! (not (is-eq admin-addr CONTRACT-OWNER)) ERR-NOT-AUTHORIZED)
+    (map-set admins admin-addr false)
+    (print { event: "admin-removed", admin: admin-addr })
+    (ok true)
+  )
+)
