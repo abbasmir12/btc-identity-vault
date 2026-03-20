@@ -6,10 +6,13 @@ import {
   Cl,
 } from '@stacks/transactions';
 
-// Network configuration
-const NETWORK = import.meta.env.VITE_NETWORK === 'mainnet' 
+// Network configuration — use proxy in dev to avoid CORS
+const isDev = import.meta.env.DEV
+const NETWORK = import.meta.env.VITE_NETWORK === 'mainnet'
   ? STACKS_MAINNET
-  : STACKS_TESTNET;
+  : isDev
+    ? { ...STACKS_TESTNET, coreApiUrl: '/api/stacks' }
+    : STACKS_TESTNET;
 
 // Contract addresses (will be set after deployment)
 export const CONTRACTS = {

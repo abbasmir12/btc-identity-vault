@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/stacks/:path*",
+      "destination": "https://api.testnet.hiro.so/:path*"
+    }
+  ]
+}

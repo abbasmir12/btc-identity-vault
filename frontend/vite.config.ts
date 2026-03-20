@@ -9,15 +9,22 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    proxy: {
+      '/api/stacks': {
+        target: 'https://api.testnet.hiro.so',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/stacks/, ''),
+      },
+    },
+  },
   build: {
     rollupOptions: {
       output: {
         manualChunks: {
-          // Vendor chunks
           'react-vendor': ['react', 'react-dom'],
           'stacks-vendor': ['@stacks/connect', '@stacks/transactions', '@stacks/network'],
           'ui-vendor': ['framer-motion', 'lucide-react'],
-          // Heavy libraries
           'qr-vendor': ['html5-qrcode', 'qrcode.react'],
         },
       },
