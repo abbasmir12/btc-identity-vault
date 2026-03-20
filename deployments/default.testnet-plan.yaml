@@ -1,0 +1,38 @@
+id: 0
+name: Testnet deployment
+network: testnet
+stacks-node: https://api.testnet.hiro.so
+bitcoin-node: http://blockstack:blockstacksystem@bitcoind.testnet.stacks.co:18332
+plan:
+  batches:
+  - id: 0
+    transactions:
+    - transaction-type: contract-publish
+      contract-name: credential-issuer
+      expected-sender: ST26P4PWK2WB16VNPN8YJZY7HJY21A3Z124RX85JE
+      cost: 102010
+      path: contracts/credential-issuer.clar
+      anchor-block-only: true
+      clarity-version: 4
+    - transaction-type: contract-publish
+      contract-name: credential-issuer-v2
+      expected-sender: ST26P4PWK2WB16VNPN8YJZY7HJY21A3Z124RX85JE
+      cost: 102010
+      path: contracts/credential-issuer-v2.clar
+      anchor-block-only: true
+      clarity-version: 4
+    - transaction-type: contract-publish
+      contract-name: identity-registry
+      expected-sender: ST26P4PWK2WB16VNPN8YJZY7HJY21A3Z124RX85JE
+      cost: 86980
+      path: contracts/identity-registry.clar
+      anchor-block-only: true
+      clarity-version: 4
+    - transaction-type: contract-publish
+      contract-name: verification
+      expected-sender: ST26P4PWK2WB16VNPN8YJZY7HJY21A3Z124RX85JE
+      cost: 98230
+      path: contracts/verification.clar
+      anchor-block-only: true
+      clarity-version: 4
+    epoch: '3.3'

@@ -113,7 +113,9 @@ export default function Navbar({ currentPage, onNavigate }: NavbarProps) {
                       </div>
 
                       <a
-                        href="#"
+                        href={`https://explorer.hiro.so/address/${user.stxAddress}?chain=testnet`}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="flex items-center gap-2 p-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
                       >
                         <ExternalLink className="w-4 h-4" />

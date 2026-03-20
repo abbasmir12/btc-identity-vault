@@ -2,35 +2,24 @@
 
 > Self-sovereign identity on Bitcoin via Stacks. Own your credentials, share selectively, verify instantly.
 
-## Overview
+Built for [Buidl Battle 2](https://dorahacks.io/hackathon/buidlbattle2) — a Bitcoin builders competition on Stacks.
 
-Bitcoin Identity Vault is a decentralized identity platform built on the Stacks blockchain (Bitcoin L2). It enables users to:
+## What It Does
 
-- **Own** their digital identity credentials (education, employment, certifications, etc.)
-- **Share selectively** — prove specific claims without revealing full data
-- **Verify instantly** — cryptographic on-chain verification in under 2 seconds
-- **Revoke anytime** — maintain full control over who accesses your data
+Bitcoin Identity Vault lets institutions issue verifiable credentials on-chain, and lets users own, share, and prove those credentials — without any central authority.
 
-All credentials are anchored to Bitcoin's security through Stacks smart contracts written in Clarity.
+**Full lifecycle:**
+1. **Issuer registers** on-chain (auto-verified)
+2. **User requests** a credential from an issuer
+3. **Issuer approves & issues** — credential anchored to Bitcoin via Stacks
+4. **User shares** a verify link or QR code
+5. **Anyone verifies** — read-only, no wallet needed, tamper-proof
 
-## Architecture
+## Live Demo
 
-```
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│   User App  │────▶│  Stacks      │────▶│  Bitcoin     │
-│  (React +   │     │  Blockchain  │     │  (Settlement)│
-│  Stacks     │     │  (Clarity    │     │              │
-│  Connect)   │     │   Contracts) │     └─────────────┘
-└──────┬──────┘     └──────────────┘
-       │
-       ▼
-┌──────────────┐     ┌──────────────┐
-│  Gaia/IPFS   │     │  Issuer      │
-│  (Encrypted  │     │  Portal      │
-│   Off-chain  │     │  (Web App)   │
-│   Storage)   │     └──────────────┘
-└──────────────┘
-```
+- **App:** [deploy URL here]
+- **Contract:** [`ST26P4PWK2WB16VNPN8YJZY7HJY21A3Z124RX85JE.credential-issuer-v7`](https://explorer.hiro.so/txid/ST26P4PWK2WB16VNPN8YJZY7HJY21A3Z124RX85JE.credential-issuer-v7?chain=testnet)
+- **Network:** Stacks Testnet
 
 ## Tech Stack
 
@@ -40,53 +29,50 @@ All credentials are anchored to Bitcoin's security through Stacks smart contract
 | Identity Anchor | BNS (.btc names) |
 | Frontend | React + Vite + TypeScript |
 | Styling | Tailwind CSS + shadcn/ui |
-| Animations | Framer Motion |
-| Wallet | Stacks Connect (Leather/Xverse) |
+| Wallet | @stacks/connect v8 (Leather, Xverse) |
+
+## Key Features
+
+- 🔐 **On-chain credentials** — no localStorage, no database, no central server
+- ✅ **Request → Approve → Issue** flow enforced by Clarity contract
+- 🔍 **Read-only verification** — anyone can verify without a wallet
+- ♻️ **On-chain revocation** — issuer can revoke, permanently recorded on Bitcoin
+- 🪪 **BNS integration** — `.btc` names shown in UI
 
 ## Getting Started
 
-### Prerequisites
-
-- Node.js >= 18
-- npm >= 9
-
-### Installation
-
 ```bash
 cd frontend
+cp .env.example .env
 npm install
-```
-
-### Development
-
-```bash
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) to view the app.
+Open [http://localhost:5173](http://localhost:5173). Connect with Leather or Xverse wallet.
 
-### Build
+## Contract Functions
 
-```bash
-npm run build
+| Function | Who | Description |
+|---|---|---|
+| `register-issuer` | Issuer | Register as a verified credential issuer |
+| `request-credential` | User | Request a credential from an issuer |
+| `approve-request` | Issuer | Approve a pending request |
+| `issue-credential` | Issuer | Issue the credential on-chain |
+| `revoke-credential` | Issuer | Revoke an issued credential |
+| `get-issued-credential` | Anyone | Read-only credential lookup |
+| `get-recipient-credentials` | Anyone | List all credentials for an address |
+
+## Project Structure
+
 ```
-
-## Smart Contracts
-
-The project uses three Clarity smart contracts deployed on Stacks:
-
-- **identity-registry.clar** — Maps .btc names to credential hashes
-- **credential-issuer.clar** — Allows trusted issuers to issue/revoke credentials  
-- **verification.clar** — On-chain verification logic with post-conditions
-
-## Features
-
-- 🔐 **Self-Sovereign Identity** — No company controls your data
-- 👁️ **Selective Disclosure** — Share only what's needed
-- ✅ **Verifiable Credentials** — Cryptographic proof of authenticity
-- 🔒 **Encrypted Storage** — Data encrypted with your keys
-- 📱 **QR Verification** — In-person verification via QR codes
-- 🎨 **Premium UI** — Glass-morphism design with smooth animations
+contracts/          Clarity smart contracts
+frontend/src/
+  pages/            Dashboard, Issuers, Verify
+  components/       UI components
+  lib/stacks.ts     All blockchain interactions
+deployments/        Testnet deployment plans
+tests/              Contract tests
+```
 
 ## License
 

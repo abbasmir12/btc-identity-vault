@@ -15,6 +15,8 @@
 (define-constant ERR-ALREADY-REVOKED (err u206))
 (define-constant ERR-INVALID-INPUT (err u207))
 (define-constant ERR-BATCH-TOO-LARGE (err u208))
+(define-constant ERR-REQUEST-NOT-FOUND (err u209))
+(define-constant ERR-REQUEST-ALREADY-EXISTS (err u210))
 
 ;; Maximum batch size for bulk issuance
 (define-constant MAX-BATCH-SIZE u25)
@@ -62,6 +64,16 @@
 
 ;; Admin list for governance
 (define-map admins principal bool)
+
+;; Credential requests from users to issuers
+(define-map credential-requests
+  { requester: principal, issuer: principal }
+  {
+    credential-type: (string-ascii 32),
+    status: (string-ascii 16),  ;; "pending" | "approved" | "rejected"
+    requested-at: uint
+  }
+)
 
 ;; ============================================================
 ;; Initialize
@@ -115,6 +127,11 @@
 ;; Get issued credential details
 (define-read-only (get-issued-credential (issuer-addr principal) (credential-hash (buff 32)))
   (map-get? issued-credentials { issuer: issuer-addr, credential-hash: credential-hash })
+)
+
+;; Get a credential request
+(define-read-only (get-credential-request (requester principal) (issuer principal))
+  (map-get? credential-requests { requester: requester, issuer: issuer })
 )
 
 ;; Get stats
@@ -261,6 +278,48 @@
     (var-set total-revoked (+ (var-get total-revoked) u1))
     
     (print { event: "credential-revoked", issuer: issuer, credential-hash: credential-hash, reason: reason })
+    (ok true)
+  )
+)
+
+;; Request a credential from an issuer
+(define-public (request-credential (issuer principal) (credential-type (string-ascii 32)))
+  (let ((caller tx-sender))
+    (asserts! (is-some (map-get? issuers issuer)) ERR-NOT-REGISTERED)
+    (asserts! (is-none (map-get? credential-requests { requester: caller, issuer: issuer })) ERR-REQUEST-ALREADY-EXISTS)
+    (map-set credential-requests
+      { requester: caller, issuer: issuer }
+      { credential-type: credential-type, status: "pending", requested-at: stacks-block-height }
+    )
+    (print { event: "credential-requested", requester: caller, issuer: issuer, credential-type: credential-type })
+    (ok true)
+  )
+)
+
+;; Approve a credential request (issuer only)
+(define-public (approve-request (requester principal))
+  (let
+    ((caller tx-sender)
+     (req (unwrap! (map-get? credential-requests { requester: requester, issuer: caller }) ERR-REQUEST-NOT-FOUND)))
+    (map-set credential-requests
+      { requester: requester, issuer: caller }
+      (merge req { status: "approved" })
+    )
+    (print { event: "request-approved", requester: requester, issuer: caller })
+    (ok true)
+  )
+)
+
+;; Reject a credential request (issuer only)
+(define-public (reject-request (requester principal))
+  (let
+    ((caller tx-sender)
+     (req (unwrap! (map-get? credential-requests { requester: requester, issuer: caller }) ERR-REQUEST-NOT-FOUND)))
+    (map-set credential-requests
+      { requester: requester, issuer: caller }
+      (merge req { status: "rejected" })
+    )
+    (print { event: "request-rejected", requester: requester, issuer: caller })
     (ok true)
   )
 )

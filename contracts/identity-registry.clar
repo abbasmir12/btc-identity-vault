@@ -102,7 +102,7 @@
   (match (map-get? credential-access { credential-hash: credential-hash, viewer: viewer })
     access (and (get is-active access)
                (or (is-eq (get expires-at access) u0)
-                   (> (get expires-at access) block-height)))
+                   (> (get expires-at access) stacks-block-height)))
     false
   )
 )
@@ -123,7 +123,7 @@
     cred (ok {
       is-valid: (and (not (get is-revoked cred))
                      (or (is-eq (get expires-at cred) u0)
-                         (> (get expires-at cred) block-height))),
+                         (> (get expires-at cred) stacks-block-height))),
       credential-type: (get credential-type cred),
       issuer: (get issuer cred),
       issued-at: (get issued-at cred),
@@ -149,7 +149,7 @@
     ;; Create identity
     (map-set identities caller {
       btc-name: btc-name,
-      registered-at: block-height,
+      registered-at: stacks-block-height,
       credential-count: u0,
       is-active: true
     })
@@ -194,7 +194,7 @@
       {
         credential-type: credential-type,
         issuer: issuer,
-        issued-at: block-height,
+        issued-at: stacks-block-height,
         expires-at: expires-at,
         is-revoked: false,
         metadata-url: metadata-url
@@ -233,7 +233,7 @@
     (map-set credential-access
       { credential-hash: credential-hash, viewer: viewer }
       {
-        granted-at: block-height,
+        granted-at: stacks-block-height,
         expires-at: expires-at,
         fields-shared: fields-shared,
         is-active: true

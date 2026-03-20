@@ -85,19 +85,31 @@ export default function CredentialDetail({ credential, onClose, onShare }: Crede
           </div>
 
           {/* Fields */}
+          {Object.keys(credential.fields).length > 0 && (
           <div>
             <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-              Credential Fields
+              Credential Details
             </h3>
             <div className="space-y-2">
-              {Object.entries(credential.fields).map(([key, value]) => (
+              {Object.entries(credential.fields).filter(([,v]) => v).map(([key, value]) => (
                 <div key={key} className="flex items-center justify-between p-3 rounded-xl bg-black/20 border border-white/5">
                   <span className="text-sm text-muted-foreground">{key}</span>
-                  <span className="text-sm font-medium">{value}</span>
+                  {key === 'Website' ? (
+                    <a href={value} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">
+                      {value} <ExternalLink className="w-3 h-3" />
+                    </a>
+                  ) : key === 'Issuer Address' ? (
+                    <a href={`https://explorer.hiro.so/address/${value}?chain=testnet`} target="_blank" rel="noopener noreferrer" className="text-xs font-mono text-primary hover:underline flex items-center gap-1">
+                      {value.slice(0,8)}...{value.slice(-4)} <ExternalLink className="w-3 h-3" />
+                    </a>
+                  ) : (
+                    <span className="text-sm font-medium">{value}</span>
+                  )}
                 </div>
               ))}
             </div>
           </div>
+          )}
 
           {/* On-chain Hash */}
           <div>
@@ -107,11 +119,13 @@ export default function CredentialDetail({ credential, onClose, onShare }: Crede
             <div className="flex items-center gap-2 p-3 rounded-xl bg-black/20 border border-white/5">
               <ExternalLink className="w-4 h-4 text-muted-foreground flex-shrink-0" />
               <span className="text-xs font-mono text-muted-foreground truncate flex-1">
-                {credential.hash}
+                {credential.hash || 'Approved on-chain (hash pending issue-credential tx)'}
               </span>
-              <button onClick={copyHash} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors">
-                <Copy className="w-3.5 h-3.5 text-muted-foreground" />
-              </button>
+              {credential.hash && (
+                <button onClick={copyHash} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors">
+                  <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              )}
             </div>
           </div>
 

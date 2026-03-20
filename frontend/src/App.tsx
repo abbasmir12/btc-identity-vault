@@ -1,11 +1,26 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import './App.css'
 import { WalletProvider, useWallet } from '@/contexts/WalletContext'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import Navbar from '@/components/layout/Navbar'
 import LandingPage from '@/pages/LandingPage'
-import DashboardPage from '@/pages/DashboardPage'
-import IssuersPage from '@/pages/IssuersPage'
-import VerifyPage from '@/pages/VerifyPage'
+
+// Lazy load heavy pages
+const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
+const IssuersPage = lazy(() => import('@/pages/IssuersPage'))
+const VerifyPage = lazy(() => import('@/pages/VerifyPage'))
+
+// Loading fallback
+function PageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    </div>
+  )
+}
 
 function AppContent() {
   const { isConnected } = useWallet()
@@ -24,11 +39,23 @@ function AppContent() {
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':
-        return <DashboardPage />
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <DashboardPage />
+          </Suspense>
+        )
       case 'issuers':
-        return <IssuersPage />
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <IssuersPage />
+          </Suspense>
+        )
       case 'verify':
-        return <VerifyPage />
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <VerifyPage />
+          </Suspense>
+        )
       default:
         return <LandingPage />
     }
@@ -51,9 +78,11 @@ function AppContent() {
 
 function App() {
   return (
-    <WalletProvider>
-      <AppContent />
-    </WalletProvider>
+    <ErrorBoundary>
+      <WalletProvider>
+        <AppContent />
+      </WalletProvider>
+    </ErrorBoundary>
   )
 }
 

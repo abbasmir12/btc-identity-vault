@@ -128,7 +128,7 @@
       name: name,
       verifier-type: verifier-type,
       total-verifications: u0,
-      registered-at: block-height,
+      registered-at: stacks-block-height,
       is-active: true
     })
     
@@ -158,7 +158,7 @@
       credential-hash: credential-hash,
       requested-fields: requested-fields,
       status: "pending",
-      created-at: block-height,
+      created-at: stacks-block-height,
       responded-at: u0,
       verification-result: false
     })
@@ -186,13 +186,13 @@
     (asserts! (is-eq (get status request) "pending") ERR-ALREADY-RESPONDED)
     
     ;; Check not expired
-    (asserts! (< (- block-height (get created-at request)) REQUEST-EXPIRY) ERR-REQUEST-EXPIRED)
+    (asserts! (< (- stacks-block-height (get created-at request)) REQUEST-EXPIRY) ERR-REQUEST-EXPIRED)
     
     ;; Update request status
     (map-set verification-requests request-id
       (merge request {
         status: "approved",
-        responded-at: block-height,
+        responded-at: stacks-block-height,
         verification-result: true
       })
     )
@@ -201,7 +201,7 @@
     (map-set verification-records
       { credential-hash: (get credential-hash request), verifier: (get verifier request), verification-id: request-id }
       {
-        verified-at: block-height,
+        verified-at: stacks-block-height,
         fields-verified: (get requested-fields request),
         is-valid: true
       }
@@ -241,7 +241,7 @@
     (map-set verification-requests request-id
       (merge request {
         status: "denied",
-        responded-at: block-height,
+        responded-at: stacks-block-height,
         verification-result: false
       })
     )
@@ -276,8 +276,8 @@
       credential-hash: credential-hash,
       requested-fields: "instant-verify",
       status: "verified",
-      created-at: block-height,
-      responded-at: block-height,
+      created-at: stacks-block-height,
+      responded-at: stacks-block-height,
       verification-result: true
     })
     
@@ -285,7 +285,7 @@
     (map-set verification-records
       { credential-hash: credential-hash, verifier: caller, verification-id: new-id }
       {
-        verified-at: block-height,
+        verified-at: stacks-block-height,
         fields-verified: "instant-verify",
         is-valid: true
       }

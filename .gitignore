@@ -1,7 +1,24 @@
-node_modules/
-dist/
+**/settings/Mainnet.toml
+**/settings/Testnet.toml
+.cache/**
+history.txt
+
+logs
+*.log
+npm-debug.log*
+coverage
+*.info
+costs-reports.json
+node_modules
+
+# Environment files
+frontend/.env
+frontend/.env.local
 .env
 .env.local
-*.log
-.DS_Store
-.vscode/
+
+# Internal docs (not for public repo)
+docs/
+
+# Build output
+frontend/dist/

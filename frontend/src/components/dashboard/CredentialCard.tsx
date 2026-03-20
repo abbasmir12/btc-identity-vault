@@ -1,10 +1,12 @@
 import { motion } from "framer-motion"
+import { useState, useRef, useEffect } from "react"
 import { 
   GraduationCap, Briefcase, CreditCard, Award, Heart, DollarSign, 
-  Share2, MoreVertical, ExternalLink, Shield, Clock
+  Share2, MoreVertical, ExternalLink, Shield, Clock, RotateCcw
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import type { Credential, CredentialType } from "@/types"
+import * as stacks from "@/lib/stacks"
 
 const typeConfig: Record<CredentialType, { icon: typeof GraduationCap; color: string; bgColor: string; borderColor: string }> = {
   education: { icon: GraduationCap, color: "text-blue-400", bgColor: "bg-blue-500/10", borderColor: "border-blue-500/20" },
@@ -27,11 +29,34 @@ interface CredentialCardProps {
   index: number
   onSelect: (credential: Credential) => void
   onShare: (credential: Credential) => void
+  onRevoked?: (id: string) => void
 }
 
-export default function CredentialCard({ credential, index, onSelect, onShare }: CredentialCardProps) {
+export default function CredentialCard({ credential, index, onSelect, onShare, onRevoked }: CredentialCardProps) {
   const config = typeConfig[credential.type]
   const Icon = config.icon
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const handleRevoke = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setMenuOpen(false)
+    if (!credential.hash) { alert('No on-chain hash — this credential was approved but not issued via issue-credential.'); return }
+    if (!confirm('Revoke this credential on-chain? This cannot be undone.')) return
+    try {
+      await stacks.revokeCredential(credential.hash.replace('0x',''), 'Revoked by issuer')
+      alert('Revocation tx broadcast. Refresh in ~30s.')
+      onRevoked?.(credential.id)
+    } catch (e: any) {
+      alert('Revoke failed: ' + e?.message)
+    }
+  }
 
   return (
     <motion.div
@@ -51,12 +76,38 @@ export default function CredentialCard({ credential, index, onSelect, onShare }:
           <Badge variant={statusVariant[credential.status]}>
             {credential.status}
           </Badge>
-          <button
-            onClick={(e) => { e.stopPropagation(); }}
-            className="p-1 rounded-lg hover:bg-white/5 transition-colors"
-          >
-            <MoreVertical className="w-4 h-4 text-muted-foreground" />
-          </button>
+          <div ref={menuRef} className="relative">
+            <button
+              onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v) }}
+              className="p-1 rounded-lg hover:bg-white/5 transition-colors"
+            >
+              <MoreVertical className="w-4 h-4 text-muted-foreground" />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-7 z-50 w-44 rounded-xl border border-border bg-card shadow-xl py-1">
+                <button onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onSelect(credential) }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-white/5 transition-colors">
+                  <ExternalLink className="w-4 h-4" /> View Details
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onShare(credential) }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-white/5 transition-colors">
+                  <Share2 className="w-4 h-4" /> Share
+                </button>
+                {credential.hash && (
+                  <a href={`https://explorer.hiro.so/txid/${credential.hash}?chain=testnet`} target="_blank" rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-white/5 transition-colors">
+                    <Shield className="w-4 h-4" /> View on Explorer
+                  </a>
+                )}
+                <div className="border-t border-border my-1" />
+                <button onClick={handleRevoke}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors">
+                  <RotateCcw className="w-4 h-4" /> Revoke
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -86,7 +137,7 @@ export default function CredentialCard({ credential, index, onSelect, onShare }:
       <div className="flex items-center gap-2 p-2.5 rounded-lg bg-black/20 border border-white/5">
         <ExternalLink className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
         <span className="text-xs font-mono text-muted-foreground truncate">
-          {credential.hash}
+          {credential.hash || 'Approved on-chain'}
         </span>
       </div>
 

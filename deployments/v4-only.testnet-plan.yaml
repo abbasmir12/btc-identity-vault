@@ -1,0 +1,18 @@
+---
+id: 0
+name: Testnet deployment - v4 only
+network: testnet
+stacks-node: https://api.testnet.hiro.so
+bitcoin-node: http://blockstack:blockstacksystem@bitcoind.testnet.stacks.co:18332
+plan:
+  batches:
+  - id: 0
+    transactions:
+    - transaction-type: contract-publish
+      contract-name: credential-issuer-v4
+      expected-sender: ST26P4PWK2WB16VNPN8YJZY7HJY21A3Z124RX85JE
+      cost: 120000
+      path: contracts/credential-issuer-v4.clar
+      anchor-block-only: true
+      clarity-version: 4
+    epoch: '3.3'

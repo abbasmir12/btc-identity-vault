@@ -1,9 +1,12 @@
 import { useState } from "react"
 import { motion } from "framer-motion"
-import { Share2, X, Copy, CheckCircle, QrCode } from "lucide-react"
+import { Share2, X, CheckCircle, QrCode, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { Credential } from "@/types"
+import { grantAccess } from "@/lib/stacks"
+import CredentialQRCode from "@/components/CredentialQRCode"
+import { useWallet } from "@/contexts/WalletContext"
 
 interface ShareDialogProps {
   credential: Credential
@@ -11,10 +14,14 @@ interface ShareDialogProps {
 }
 
 export default function ShareDialog({ credential, onClose }: ShareDialogProps) {
+  const { address } = useWallet()
   const [selectedFields, setSelectedFields] = useState<string[]>([])
   const [verifierAddress, setVerifierAddress] = useState("")
   const [isShared, setIsShared] = useState(false)
   const [showQR, setShowQR] = useState(false)
+  const [isPending, setIsPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [txId, setTxId] = useState<string | null>(null)
 
   const toggleField = (field: string) => {
     setSelectedFields((prev) =>
@@ -22,12 +29,29 @@ export default function ShareDialog({ credential, onClose }: ShareDialogProps) {
     )
   }
 
-  const handleShare = () => {
-    // Simulate sharing
-    setIsShared(true)
-    setTimeout(() => {
-      onClose()
-    }, 2000)
+  const handleShare = async () => {
+    setIsPending(true)
+    setError(null)
+    
+    try {
+      // Call blockchain transaction
+      const result = await grantAccess(
+        credential.hash,
+        verifierAddress,
+        0, // 0 = never expires
+        selectedFields.join(',')
+      ) as { txid: string }
+      
+      setTxId(result.txid)
+      setIsShared(true)
+      
+      setTimeout(() => {
+        onClose()
+      }, 3000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Transaction failed')
+      setIsPending(false)
+    }
   }
 
   if (isShared) {
@@ -41,7 +65,7 @@ export default function ShareDialog({ credential, onClose }: ShareDialogProps) {
         <motion.div
           initial={{ scale: 0.8 }}
           animate={{ scale: 1 }}
-          className="relative z-50 rounded-2xl border border-emerald-500/30 bg-card p-12 text-center"
+          className="relative z-50 rounded-2xl border border-emerald-500/30 bg-card p-12 text-center max-w-md"
         >
           <motion.div
             initial={{ scale: 0 }}
@@ -51,9 +75,15 @@ export default function ShareDialog({ credential, onClose }: ShareDialogProps) {
             <CheckCircle className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
           </motion.div>
           <h3 className="text-xl font-semibold mb-2">Credential Shared!</h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground mb-4">
             {selectedFields.length} fields shared successfully
           </p>
+          {txId && (
+            <div className="p-3 rounded-lg bg-black/20 border border-white/5">
+              <p className="text-xs text-muted-foreground mb-1">Transaction ID:</p>
+              <p className="text-xs font-mono break-all">{txId}</p>
+            </div>
+          )}
         </motion.div>
       </motion.div>
     )
@@ -138,36 +168,56 @@ export default function ShareDialog({ credential, onClose }: ShareDialogProps) {
           <div className="flex gap-3">
             <Button
               onClick={handleShare}
-              disabled={selectedFields.length === 0 || !verifierAddress}
+              disabled={selectedFields.length === 0 || !verifierAddress || isPending}
               className="flex-1"
             >
-              <Share2 className="w-4 h-4 mr-2" />
-              Share {selectedFields.length} Field{selectedFields.length !== 1 ? "s" : ""}
+              {isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Sharing...
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-4 h-4 mr-2" />
+                  Share {selectedFields.length} Field{selectedFields.length !== 1 ? "s" : ""}
+                </>
+              )}
             </Button>
             <Button
               variant="outline"
               onClick={() => setShowQR(!showQR)}
+              disabled={isPending}
             >
               <QrCode className="w-4 h-4 mr-2" />
               QR
             </Button>
           </div>
 
-          {showQR && (
+          {/* Error message */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-500 text-sm"
+            >
+              {error}
+            </motion.div>
+          )}
+
+          {showQR && address && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
-              className="flex flex-col items-center gap-3 p-4 rounded-xl bg-white"
+              className="flex flex-col items-center gap-3 p-4 rounded-xl bg-secondary"
             >
-              {/* Simple QR placeholder - in real app would use qrcode.react */}
-              <div className="w-48 h-48 bg-black rounded-lg flex items-center justify-center">
-                <QrCode className="w-24 h-24 text-white" />
-              </div>
-              <p className="text-xs text-black/60 text-center">Scan to verify credential</p>
-              <button className="flex items-center gap-1 text-xs text-primary">
-                <Copy className="w-3 h-3" />
-                Copy verification link
-              </button>
+              <CredentialQRCode
+                credentialHash={credential.hash}
+                ownerAddress={address}
+                title={credential.title}
+              />
+              <p className="text-xs text-muted-foreground text-center">
+                Scan to verify credential with {selectedFields.length} field{selectedFields.length !== 1 ? 's' : ''} shared
+              </p>
             </motion.div>
           )}
         </div>

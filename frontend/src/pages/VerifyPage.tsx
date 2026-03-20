@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, lazy, Suspense } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   Search, Shield, CheckCircle, XCircle, Clock, 
@@ -7,9 +7,13 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { getCredentialStatus } from "@/lib/stacks"
+
+// Lazy load QR scanner (heavy library)
+const QRScanner = lazy(() => import("@/components/QRScanner"))
 
 type VerificationResult = {
-  status: "verified" | "invalid" | "expired"
+  status: "verified" | "invalid" | "expired" | "revoked"
   credential: {
     title: string
     issuer: string
@@ -22,47 +26,65 @@ type VerificationResult = {
 
 export default function VerifyPage() {
   const [hashInput, setHashInput] = useState("")
+  const [ownerInput, setOwnerInput] = useState("")
   const [isVerifying, setIsVerifying] = useState(false)
   const [result, setResult] = useState<VerificationResult>(null)
   const [hasSearched, setHasSearched] = useState(false)
+  const [showScanner, setShowScanner] = useState(false)
 
-  const handleVerify = async () => {
+  const handleVerify = async (hash?: string, owner?: string) => {
+    const credentialHash = hash || hashInput
+    const ownerAddress = owner || ownerInput
+    
+    if (!credentialHash) return
+
     setIsVerifying(true)
     setHasSearched(true)
-    // Simulate verification
-    await new Promise((resolve) => setTimeout(resolve, 2000))
 
-    // Mock result based on input
-    if (hashInput.startsWith("0x") && hashInput.length > 10) {
-      setResult({
-        status: "verified",
-        credential: {
-          title: "Bachelor of Computer Science",
-          issuer: "MIT University",
-          issuedDate: "2024-06-15",
-          hash: hashInput,
-          fields: {
-            "Degree": "Bachelor of Science",
-            "Major": "Computer Science",
-            "Graduation Year": "2024",
+    try {
+      const status = await getCredentialStatus(credentialHash, ownerAddress)
+      const cred = status?.value?.value
+      if (cred) {
+        setResult({
+          status: cred['is-revoked']?.value ? "revoked" : "verified",
+          credential: {
+            title: cred['credential-type']?.value || "Credential",
+            issuer: ownerAddress,
+            issuedDate: new Date(parseInt(cred['issued-at']?.value ?? '0') * 1000).toLocaleDateString(),
+            hash: credentialHash,
+            fields: {
+              'Credential Type': cred['credential-type']?.value ?? '',
+              'Recipient': cred.recipient?.value ?? '',
+              'Issuer Address': ownerAddress,
+            },
           },
-        },
-      })
-    } else if (hashInput.length > 5) {
+        })
+      } else {
+        setResult({
+          status: "invalid",
+          credential: { title: "Not Found", issuer: "", issuedDate: "", hash: credentialHash, fields: {} },
+        })
+      }
+    } catch (err) {
       setResult({
         status: "invalid",
         credential: {
-          title: "Unknown Credential",
+          title: "Verification Failed",
           issuer: "Unknown",
           issuedDate: "",
-          hash: hashInput,
+          hash: credentialHash,
           fields: {},
         },
       })
-    } else {
-      setResult(null)
     }
+
     setIsVerifying(false)
+  }
+
+  const handleQRScan = (data: { hash: string; owner: string }) => {
+    setShowScanner(false)
+    setHashInput(data.hash)
+    handleVerify(data.hash, data.owner)
   }
 
   return (
@@ -93,38 +115,60 @@ export default function VerifyPage() {
           transition={{ delay: 0.1 }}
           className="rounded-2xl glass p-6 sm:p-8 mb-8"
         >
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Enter credential hash (e.g., 0x7f83b1657ff1fc53b...)"
-                value={hashInput}
-                onChange={(e) => setHashInput(e.target.value)}
-                className="pl-10 h-12 text-base"
-                onKeyDown={(e) => e.key === "Enter" && handleVerify()}
-              />
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Enter credential hash (e.g., 0x7f83b1657ff1fc53b...)"
+                  value={hashInput}
+                  onChange={(e) => setHashInput(e.target.value)}
+                  className="pl-10 h-12 text-base"
+                  onKeyDown={(e) => e.key === "Enter" && handleVerify()}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="lg"
+                  onClick={() => handleVerify()}
+                  disabled={!hashInput || isVerifying}
+                  className="min-w-32"
+                >
+                  {isVerifying ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Search className="w-4 h-4 mr-2" />
+                      Verify
+                    </>
+                  )}
+                </Button>
+                <Button size="lg" variant="outline" onClick={() => setShowScanner(!showScanner)}>
+                  <QrCode className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Button
-                size="lg"
-                onClick={handleVerify}
-                disabled={!hashInput || isVerifying}
-                className="min-w-32"
-              >
-                {isVerifying ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    <Search className="w-4 h-4 mr-2" />
-                    Verify
-                  </>
-                )}
-              </Button>
-              <Button size="lg" variant="outline">
-                <QrCode className="w-4 h-4" />
-              </Button>
-            </div>
+            <Input
+              placeholder="Issuer address (e.g., ST1FW79...)"
+              value={ownerInput}
+              onChange={(e) => setOwnerInput(e.target.value)}
+              className="h-10 text-sm"
+            />
           </div>
+
+          {/* QR Scanner */}
+          {showScanner && (
+            <div className="mt-4 p-4 rounded-lg glass">
+              <Suspense fallback={
+                <div className="text-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-primary" />
+                  <p className="text-sm text-muted-foreground">Loading scanner...</p>
+                </div>
+              }>
+                <QRScanner onScan={handleQRScan} onClose={() => setShowScanner(false)} />
+              </Suspense>
+            </div>
+          )}
         </motion.div>
 
         {/* Verification Result */}
