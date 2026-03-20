@@ -70,7 +70,7 @@ export default function LandingPage() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-8"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-8 mt-[100px]"
           >
             <Bitcoin className="w-4 h-4 text-primary" />
             <span className="text-sm text-muted-foreground">Powered by Bitcoin & Stacks</span>
